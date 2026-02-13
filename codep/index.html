@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Texas Hold'em Poker</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/cards.css">
+</head>
+<body>
+    <div id="app">
+        <!-- ── Start Screen ──────────────────────────────────────────── -->
+        <div id="start-screen" class="screen active">
+            <div class="start-container">
+                <h1 class="title">Texas Hold'em</h1>
+                <p class="subtitle">Poker Simulator & Trainer</p>
+
+                <div class="setup-form">
+                    <div class="form-group">
+                        <label for="player-name">Your Name</label>
+                        <input type="text" id="player-name" value="Player" maxlength="12">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Number of Opponents</label>
+                        <div class="selector-row">
+                            <button class="selector-btn" data-value="1">1</button>
+                            <button class="selector-btn" data-value="2">2</button>
+                            <button class="selector-btn active" data-value="3">3</button>
+                            <button class="selector-btn" data-value="4">4</button>
+                            <button class="selector-btn" data-value="5">5</button>
+                            <button class="selector-btn" data-value="6">6</button>
+                            <button class="selector-btn" data-value="7">7</button>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>AI Difficulty</label>
+                        <div class="selector-row">
+                            <button class="selector-btn" data-value="1">Easy</button>
+                            <button class="selector-btn" data-value="2">Medium</button>
+                            <button class="selector-btn active" data-value="3">Hard</button>
+                            <button class="selector-btn" data-value="4">Expert</button>
+                            <button class="selector-btn" data-value="5">Pro</button>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Starting Chips</label>
+                        <div class="selector-row">
+                            <button class="selector-btn" data-value="500">500</button>
+                            <button class="selector-btn active" data-value="1000">1,000</button>
+                            <button class="selector-btn" data-value="2000">2,000</button>
+                            <button class="selector-btn" data-value="5000">5,000</button>
+                        </div>
+                    </div>
+
+                    <button id="start-game-btn" class="btn-primary">Start Game</button>
+
+                    <div class="practice-section">
+                        <p class="practice-label">Training</p>
+                        <button id="regimen-btn" class="btn-primary regimen-start-btn">Training Regimen</button>
+                        <div class="practice-buttons" style="margin-top: 10px;">
+                            <button id="scenario-btn" class="btn-practice">Scenario Trainer</button>
+                            <button id="odds-quiz-btn" class="btn-practice">Odds Quiz</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── Game Screen ───────────────────────────────────────────── -->
+        <div id="game-screen" class="screen">
+            <!-- Top bar -->
+            <div id="top-bar">
+                <div class="top-bar-left">
+                    <span id="hand-number-display">Hand #1</span>
+                    <span id="blinds-display">Blinds: 10/20</span>
+                    <span id="position-indicator" class="position-indicator hidden"></span>
+                </div>
+                <div class="top-bar-right">
+                    <button id="toggle-aids-btn" class="btn-small">Training Aids</button>
+                    <button id="stats-btn" class="btn-small">Stats</button>
+                    <button id="new-game-btn" class="btn-small">New Game</button>
+                </div>
+            </div>
+
+            <!-- Training Aids Toggle Panel -->
+            <div id="training-aids-panel" class="hidden">
+                <div class="aids-panel-inner">
+                    <label class="aid-toggle">
+                        <input type="checkbox" id="toggle-odds" checked>
+                        <span>Live Odds Overlay</span>
+                    </label>
+                    <label class="aid-toggle">
+                        <input type="checkbox" id="toggle-coach">
+                        <span>Coaching Hints</span>
+                    </label>
+                    <label class="aid-toggle">
+                        <input type="checkbox" id="toggle-position" checked>
+                        <span>Position Indicator</span>
+                    </label>
+                    <label class="aid-toggle">
+                        <input type="checkbox" id="toggle-hand-chart">
+                        <span>Starting Hand Chart</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Poker Table -->
+            <div id="table-container">
+                <div id="table">
+                    <!-- Community Cards -->
+                    <div id="community-cards">
+                        <div class="card-slot" id="cc-0"></div>
+                        <div class="card-slot" id="cc-1"></div>
+                        <div class="card-slot" id="cc-2"></div>
+                        <div class="card-slot" id="cc-3"></div>
+                        <div class="card-slot" id="cc-4"></div>
+                    </div>
+
+                    <!-- Pot Display -->
+                    <div id="pot-display">
+                        <span class="pot-label">Pot</span>
+                        <span id="pot-amount">0</span>
+                    </div>
+
+                    <!-- Player Seats (positioned via CSS) -->
+                    <div class="player-seat" id="seat-0"></div>
+                    <div class="player-seat" id="seat-1"></div>
+                    <div class="player-seat" id="seat-2"></div>
+                    <div class="player-seat" id="seat-3"></div>
+                    <div class="player-seat" id="seat-4"></div>
+                    <div class="player-seat" id="seat-5"></div>
+                    <div class="player-seat" id="seat-6"></div>
+                    <div class="player-seat" id="seat-7"></div>
+                </div>
+            </div>
+
+            <!-- Hand Strength Display -->
+            <div id="hand-strength-display" class="hidden">
+                <span id="hand-strength-text">Your Hand: --</span>
+            </div>
+
+            <!-- Live Odds Overlay -->
+            <div id="odds-overlay" class="hidden">
+                <div class="odds-overlay-inner">
+                    <div class="odds-item">
+                        <span class="odds-label">Equity</span>
+                        <span id="odds-equity" class="odds-value">--</span>
+                    </div>
+                    <div class="odds-item">
+                        <span class="odds-label">Pot Odds</span>
+                        <span id="odds-pot-odds" class="odds-value">--</span>
+                    </div>
+                    <div class="odds-item">
+                        <span class="odds-label">Outs</span>
+                        <span id="odds-outs" class="odds-value">--</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Coaching Hint -->
+            <div id="coaching-hint" class="hidden">
+                <button id="btn-suggest" class="btn-suggest">Suggest</button>
+                <div id="coach-suggestion" class="coach-suggestion hidden"></div>
+            </div>
+
+            <!-- Starting Hand Chart Overlay -->
+            <div id="hand-chart-overlay" class="hidden">
+                <div class="hand-chart-header">
+                    <span>Starting Hand Chart</span>
+                    <span id="hand-chart-position" class="hand-chart-pos"></span>
+                </div>
+                <div id="hand-chart-grid" class="hand-chart-grid"></div>
+                <div class="hand-chart-legend">
+                    <span class="legend-item"><span class="legend-swatch tier-1"></span>Premium</span>
+                    <span class="legend-item"><span class="legend-swatch tier-2"></span>Strong</span>
+                    <span class="legend-item"><span class="legend-swatch tier-3"></span>Good</span>
+                    <span class="legend-item"><span class="legend-swatch tier-4"></span>Playable</span>
+                    <span class="legend-item"><span class="legend-swatch tier-5"></span>Marginal</span>
+                    <span class="legend-item"><span class="legend-swatch tier-fold"></span>Fold</span>
+                </div>
+            </div>
+
+            <!-- Betting Controls -->
+            <div id="controls" class="hidden">
+                <div class="controls-inner">
+                    <button id="btn-fold" class="btn-action btn-fold">Fold</button>
+                    <button id="btn-check" class="btn-action btn-check hidden">Check</button>
+                    <button id="btn-call" class="btn-action btn-call hidden">
+                        Call <span id="call-amount"></span>
+                    </button>
+
+                    <div id="raise-controls">
+                        <div class="raise-slider-container">
+                            <input type="range" id="raise-slider" min="0" max="100" value="50">
+                            <div class="raise-amount-display">
+                                <span id="raise-amount-text">0</span>
+                            </div>
+                        </div>
+                        <div class="quick-raises">
+                            <button class="btn-quick" data-fraction="0.33">1/3</button>
+                            <button class="btn-quick" data-fraction="0.5">1/2</button>
+                            <button class="btn-quick" data-fraction="0.75">3/4</button>
+                            <button class="btn-quick" data-fraction="1">Pot</button>
+                        </div>
+                        <button id="btn-raise" class="btn-action btn-raise">
+                            Raise to <span id="raise-display">0</span>
+                        </button>
+                    </div>
+
+                    <button id="btn-allin" class="btn-action btn-allin">All In</button>
+                </div>
+            </div>
+
+            <!-- Continue / Next Hand button -->
+            <div id="continue-controls" class="hidden">
+                <button id="btn-continue" class="btn-primary">Next Hand</button>
+            </div>
+
+            <!-- Game message overlay -->
+            <div id="game-message" class="hidden">
+                <span id="game-message-text"></span>
+            </div>
+        </div>
+
+        <!-- ── Stats Screen ──────────────────────────────────────────── -->
+        <div id="stats-screen" class="screen">
+            <div class="stats-container">
+                <div class="stats-header">
+                    <h2>Session Statistics</h2>
+                    <button id="stats-back-btn" class="btn-small">Back to Game</button>
+                </div>
+
+                <!-- Stats Tabs -->
+                <div class="stats-tabs">
+                    <button class="stats-tab active" data-tab="overview">Overview</button>
+                    <button class="stats-tab" data-tab="history">Hand History</button>
+                    <button class="stats-tab" data-tab="analysis">Analysis</button>
+                </div>
+
+                <!-- Overview Tab -->
+                <div class="stats-tab-content active" id="tab-overview">
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-value" id="stat-hands-played">0</div>
+                            <div class="stat-label">Hands Played</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="stat-win-rate">0%</div>
+                            <div class="stat-label">Win Rate</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="stat-profit">0</div>
+                            <div class="stat-label">Net Profit</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="stat-vpip">0%</div>
+                            <div class="stat-label">VPIP</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="stat-pfr">0%</div>
+                            <div class="stat-label">PFR</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="stat-aggression">0</div>
+                            <div class="stat-label">Aggression Factor</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="stat-showdown-wr">0%</div>
+                            <div class="stat-label">Showdown Win Rate</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="stat-biggest-win">0</div>
+                            <div class="stat-label">Biggest Win</div>
+                        </div>
+                    </div>
+
+                    <!-- Chip chart -->
+                    <div class="chip-chart-container">
+                        <h3>Chip Count Over Time</h3>
+                        <canvas id="chip-chart" width="700" height="200"></canvas>
+                    </div>
+                </div>
+
+                <!-- Hand History Tab -->
+                <div class="stats-tab-content" id="tab-history">
+                    <div id="hand-history-list"></div>
+                </div>
+
+                <!-- Analysis Tab -->
+                <div class="stats-tab-content" id="tab-analysis">
+                    <div id="analysis-content">
+                        <p class="analysis-placeholder">Select a hand from History to see detailed analysis.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- ── Scenario Trainer Screen ──────────────────────────────── -->
+        <div id="scenario-screen" class="screen">
+            <div class="practice-container">
+                <div class="practice-header">
+                    <h2>Scenario Trainer</h2>
+                    <div class="practice-header-right">
+                        <span id="scenario-score" class="practice-score">Score: 0/0</span>
+                        <button id="scenario-back-btn" class="btn-small">Back</button>
+                    </div>
+                </div>
+
+                <!-- Category Selection -->
+                <div id="scenario-categories">
+                    <p class="practice-subtitle">Choose a category to practice:</p>
+                    <div id="scenario-category-list" class="category-grid"></div>
+                </div>
+
+                <!-- Scenario Display -->
+                <div id="scenario-active" class="hidden">
+                    <div class="scenario-card">
+                        <div class="scenario-meta">
+                            <span id="scenario-category-badge" class="category-badge"></span>
+                            <span id="scenario-difficulty" class="difficulty-badge"></span>
+                        </div>
+                        <h3 id="scenario-title"></h3>
+                        <p id="scenario-description" class="scenario-desc"></p>
+                        <p id="scenario-villain" class="scenario-villain"></p>
+
+                        <div class="scenario-cards-area">
+                            <div class="scenario-hand">
+                                <span class="cards-label">Your Hand</span>
+                                <div id="scenario-hole-cards" class="card-display"></div>
+                            </div>
+                            <div id="scenario-board-area" class="scenario-hand">
+                                <span class="cards-label">Board</span>
+                                <div id="scenario-community-cards" class="card-display"></div>
+                            </div>
+                        </div>
+
+                        <div class="scenario-info-row">
+                            <span>Pot: <strong id="scenario-pot"></strong></span>
+                            <span>To Call: <strong id="scenario-call"></strong></span>
+                            <span>Position: <strong id="scenario-position"></strong></span>
+                        </div>
+                    </div>
+
+                    <div id="scenario-actions" class="action-buttons">
+                        <button class="btn-scenario-action" data-action="fold">Fold</button>
+                        <button class="btn-scenario-action" data-action="check">Check</button>
+                        <button class="btn-scenario-action" data-action="call">Call</button>
+                        <button class="btn-scenario-action" data-action="raise">Bet / Raise</button>
+                    </div>
+
+                    <div id="scenario-result" class="hidden">
+                        <div id="scenario-result-card" class="result-card">
+                            <div id="scenario-result-icon" class="result-icon"></div>
+                            <p id="scenario-result-text" class="result-text"></p>
+                            <p id="scenario-explanation" class="result-explanation"></p>
+                            <button id="scenario-next-btn" class="btn-primary">Next Scenario</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── Odds Quiz Screen ───────────────────────────────────────── -->
+        <div id="odds-quiz-screen" class="screen">
+            <div class="practice-container">
+                <div class="practice-header">
+                    <h2>Odds Quiz</h2>
+                    <div class="practice-header-right">
+                        <span id="quiz-score" class="practice-score">Score: 0/0</span>
+                        <button id="quiz-back-btn" class="btn-small">Back</button>
+                    </div>
+                </div>
+
+                <div id="quiz-active">
+                    <div class="scenario-card">
+                        <p class="quiz-instruction">Estimate your equity (win %) against <strong id="quiz-opponents">1</strong> opponent(s).</p>
+
+                        <div class="scenario-cards-area">
+                            <div class="scenario-hand">
+                                <span class="cards-label">Your Hand</span>
+                                <div id="quiz-hole-cards" class="card-display"></div>
+                            </div>
+                            <div class="scenario-hand">
+                                <span class="cards-label">Board (<span id="quiz-stage">Flop</span>)</span>
+                                <div id="quiz-community-cards" class="card-display"></div>
+                            </div>
+                        </div>
+
+                        <div id="quiz-current-hand" class="quiz-hand-name"></div>
+                    </div>
+
+                    <div id="quiz-input-area">
+                        <p class="quiz-prompt">What is your estimated equity?</p>
+                        <div class="equity-slider-area">
+                            <input type="range" id="equity-slider" min="0" max="100" value="50">
+                            <div class="equity-display">
+                                <span id="equity-value">50</span>%
+                            </div>
+                        </div>
+                        <button id="quiz-submit-btn" class="btn-primary">Submit Guess</button>
+                    </div>
+
+                    <div id="quiz-result" class="hidden">
+                        <div id="quiz-result-card" class="result-card">
+                            <div class="quiz-result-numbers">
+                                <div class="quiz-number">
+                                    <span class="quiz-number-label">Your Guess</span>
+                                    <span id="quiz-guess-display" class="quiz-number-value">50%</span>
+                                </div>
+                                <div class="quiz-number">
+                                    <span class="quiz-number-label">Actual Equity</span>
+                                    <span id="quiz-actual-display" class="quiz-number-value">50%</span>
+                                </div>
+                                <div class="quiz-number">
+                                    <span class="quiz-number-label">Error</span>
+                                    <span id="quiz-error-display" class="quiz-number-value">0%</span>
+                                </div>
+                            </div>
+                            <p id="quiz-result-text" class="result-text"></p>
+                            <p class="quiz-avg-error">Average Error: <strong id="quiz-avg-error">0</strong>%</p>
+                            <button id="quiz-next-btn" class="btn-primary">Next Question</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── Training Regimen Screen ─────────────────────────────────── -->
+        <div id="regimen-screen" class="screen">
+            <div class="practice-container regimen-container">
+                <div class="practice-header">
+                    <h2 id="regimen-header-title">Training Regimen</h2>
+                    <div class="practice-header-right">
+                        <span id="regimen-stage-label" class="practice-score"></span>
+                        <button id="regimen-back-btn" class="btn-small">Back</button>
+                    </div>
+                </div>
+
+                <!-- Stage Overview -->
+                <div id="regimen-stages-view">
+                    <p class="practice-subtitle">Progress through each stage to master poker fundamentals.</p>
+                    <div id="regimen-stage-list" class="regimen-stage-list"></div>
+                    <div class="regimen-reset-row">
+                        <button id="regimen-reset-btn" class="btn-small btn-danger">Reset Progress</button>
+                    </div>
+                </div>
+
+                <!-- Activity View -->
+                <div id="regimen-activity-view" class="hidden">
+                    <div class="regimen-activity-header">
+                        <button id="regimen-activity-back-btn" class="btn-small">Back to Stages</button>
+                        <span id="regimen-activity-score" class="practice-score"></span>
+                    </div>
+
+                    <!-- Stage Activity List (for multi-activity stages) -->
+                    <div id="regimen-activity-list" class="regimen-activity hidden">
+                        <div id="regimen-activity-cards" class="category-grid"></div>
+                    </div>
+
+                    <!-- Lesson Viewer -->
+                    <div id="regimen-lesson-viewer" class="regimen-activity hidden"></div>
+
+                    <!-- Hand Chart Study -->
+                    <div id="regimen-hand-chart-study" class="regimen-activity hidden">
+                        <h3>Starting Hand Chart</h3>
+                        <p class="practice-subtitle">Click any cell to learn about that hand.</p>
+                        <div id="regimen-chart-grid" class="hand-chart-grid regimen-chart-grid"></div>
+                        <div class="hand-chart-legend">
+                            <span class="legend-item"><span class="legend-swatch tier-1"></span>Premium</span>
+                            <span class="legend-item"><span class="legend-swatch tier-2"></span>Strong</span>
+                            <span class="legend-item"><span class="legend-swatch tier-3"></span>Good</span>
+                            <span class="legend-item"><span class="legend-swatch tier-4"></span>Playable</span>
+                            <span class="legend-item"><span class="legend-swatch tier-5"></span>Marginal</span>
+                            <span class="legend-item"><span class="legend-swatch tier-fold"></span>Fold</span>
+                        </div>
+                        <div id="regimen-chart-info" class="regimen-chart-info hidden">
+                            <h4 id="regimen-chart-info-hand"></h4>
+                            <p id="regimen-chart-info-tier"></p>
+                            <p id="regimen-chart-info-desc"></p>
+                        </div>
+                    </div>
+
+                    <!-- Hand Ranking Quiz -->
+                    <div id="regimen-hand-ranking-quiz" class="regimen-activity hidden">
+                        <div class="scenario-card">
+                            <h3>What is the best hand?</h3>
+                            <div class="scenario-cards-area">
+                                <div class="scenario-hand">
+                                    <span class="cards-label">Cards</span>
+                                    <div id="regimen-hr-cards" class="card-display"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="regimen-hr-choices" class="regimen-choices"></div>
+                        <div id="regimen-hr-result" class="hidden">
+                            <div class="result-card">
+                                <div id="regimen-hr-result-icon" class="result-icon"></div>
+                                <p id="regimen-hr-result-text" class="result-text"></p>
+                                <button id="regimen-hr-next-btn" class="btn-primary">Next Question</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Starting Hand Quiz -->
+                    <div id="regimen-starting-hand-quiz" class="regimen-activity hidden">
+                        <div class="scenario-card">
+                            <h3>Play or Fold?</h3>
+                            <div class="scenario-cards-area">
+                                <div class="scenario-hand">
+                                    <span class="cards-label">Your Hand</span>
+                                    <div id="regimen-sh-cards" class="card-display"></div>
+                                </div>
+                            </div>
+                            <div class="scenario-info-row">
+                                <span>Position: <strong id="regimen-sh-position"></strong></span>
+                                <span>Situation: <strong id="regimen-sh-situation"></strong></span>
+                            </div>
+                        </div>
+                        <div id="regimen-sh-actions" class="action-buttons">
+                            <button class="btn-scenario-action" data-action="play">Play</button>
+                            <button class="btn-scenario-action" data-action="fold">Fold</button>
+                        </div>
+                        <div id="regimen-sh-result" class="hidden">
+                            <div class="result-card">
+                                <div id="regimen-sh-result-icon" class="result-icon"></div>
+                                <p id="regimen-sh-result-text" class="result-text"></p>
+                                <p id="regimen-sh-explanation" class="result-explanation"></p>
+                                <button id="regimen-sh-next-btn" class="btn-primary">Next Question</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Pot Odds Quiz -->
+                    <div id="regimen-pot-odds-quiz" class="regimen-activity hidden">
+                        <div class="scenario-card">
+                            <h3>What are the pot odds?</h3>
+                            <div class="regimen-pot-odds-display">
+                                <div class="regimen-pot-odds-item">
+                                    <span class="odds-label">Pot</span>
+                                    <span id="regimen-po-pot" class="odds-value good">--</span>
+                                </div>
+                                <div class="regimen-pot-odds-item">
+                                    <span class="odds-label">To Call</span>
+                                    <span id="regimen-po-call" class="odds-value bad">--</span>
+                                </div>
+                            </div>
+                            <p class="practice-subtitle">What minimum equity do you need to break even on this call?</p>
+                        </div>
+                        <div id="regimen-po-choices" class="regimen-choices"></div>
+                        <div id="regimen-po-result" class="hidden">
+                            <div class="result-card">
+                                <div id="regimen-po-result-icon" class="result-icon"></div>
+                                <p id="regimen-po-result-text" class="result-text"></p>
+                                <button id="regimen-po-next-btn" class="btn-primary">Next Question</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Outs Quiz -->
+                    <div id="regimen-outs-quiz" class="regimen-activity hidden">
+                        <div class="scenario-card">
+                            <h3>Count Your Outs</h3>
+                            <p class="practice-subtitle">How many cards will improve your hand rank?</p>
+                            <div class="scenario-cards-area">
+                                <div class="scenario-hand">
+                                    <span class="cards-label">Your Hand</span>
+                                    <div id="regimen-outs-hole" class="card-display"></div>
+                                </div>
+                                <div class="scenario-hand">
+                                    <span class="cards-label">Board (<span id="regimen-outs-stage"></span>)</span>
+                                    <div id="regimen-outs-board" class="card-display"></div>
+                                </div>
+                            </div>
+                            <div id="regimen-outs-current-hand" class="quiz-hand-name"></div>
+                        </div>
+                        <div class="equity-slider-area">
+                            <input type="range" id="regimen-outs-slider" min="0" max="20" value="8">
+                            <div class="equity-display">
+                                <span id="regimen-outs-value">8</span> outs
+                            </div>
+                        </div>
+                        <button id="regimen-outs-submit-btn" class="btn-primary">Submit</button>
+                        <div id="regimen-outs-result" class="hidden">
+                            <div class="result-card">
+                                <div class="quiz-result-numbers">
+                                    <div class="quiz-number">
+                                        <span class="quiz-number-label">Your Guess</span>
+                                        <span id="regimen-outs-guess-display" class="quiz-number-value">0</span>
+                                    </div>
+                                    <div class="quiz-number">
+                                        <span class="quiz-number-label">Actual Outs</span>
+                                        <span id="regimen-outs-actual-display" class="quiz-number-value">0</span>
+                                    </div>
+                                </div>
+                                <p id="regimen-outs-result-text" class="result-text"></p>
+                                <button id="regimen-outs-next-btn" class="btn-primary">Next Question</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Terminology Quiz -->
+                    <div id="regimen-terminology-quiz" class="regimen-activity hidden">
+                        <div class="scenario-card">
+                            <h3>Terminology Quiz</h3>
+                            <p class="practice-subtitle">Which term matches this definition?</p>
+                            <div id="regimen-term-definition" class="definition-card"></div>
+                        </div>
+                        <div id="regimen-term-choices" class="regimen-choices"></div>
+                        <div id="regimen-term-result" class="hidden">
+                            <div class="result-card">
+                                <div id="regimen-term-result-icon" class="result-icon"></div>
+                                <p id="regimen-term-result-text" class="result-text"></p>
+                                <button id="regimen-term-next-btn" class="btn-primary">Next Question</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Rule of 2 & 4 Quiz -->
+                    <div id="regimen-rule24-quiz" class="regimen-activity hidden">
+                        <div class="scenario-card">
+                            <h3>Rule of 2 &amp; 4</h3>
+                            <p id="regimen-rule24-scenario" class="scenario-desc"></p>
+                            <div class="regimen-rule24-info">
+                                <span>Outs: <strong id="regimen-rule24-outs"></strong></span>
+                                <span>Street: <strong id="regimen-rule24-street"></strong></span>
+                                <span>Rule: <strong id="regimen-rule24-rule"></strong></span>
+                            </div>
+                            <p class="practice-subtitle">Estimate the equity:</p>
+                        </div>
+                        <div id="regimen-rule24-choices" class="regimen-choices"></div>
+                        <div id="regimen-rule24-result" class="hidden">
+                            <div class="result-card">
+                                <div id="regimen-rule24-result-icon" class="result-icon"></div>
+                                <p id="regimen-rule24-result-text" class="result-text"></p>
+                                <button id="regimen-rule24-next-btn" class="btn-primary">Next Question</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Equity Quiz (Odds-style slider) -->
+                    <div id="regimen-equity-quiz" class="regimen-activity hidden">
+                        <div class="scenario-card">
+                            <h3>Equity Estimation</h3>
+                            <p class="quiz-instruction">Estimate your equity (win %) against <strong id="regimen-eq-opponents">1</strong> opponent(s).</p>
+                            <div class="scenario-cards-area">
+                                <div class="scenario-hand">
+                                    <span class="cards-label">Your Hand</span>
+                                    <div id="regimen-eq-hole" class="card-display"></div>
+                                </div>
+                                <div class="scenario-hand">
+                                    <span class="cards-label">Board (<span id="regimen-eq-stage">Flop</span>)</span>
+                                    <div id="regimen-eq-board" class="card-display"></div>
+                                </div>
+                            </div>
+                            <div id="regimen-eq-current-hand" class="quiz-hand-name"></div>
+                        </div>
+                        <div class="equity-slider-area">
+                            <input type="range" id="regimen-eq-slider" min="0" max="100" value="50">
+                            <div class="equity-display">
+                                <span id="regimen-eq-value">50</span>%
+                            </div>
+                        </div>
+                        <button id="regimen-eq-submit-btn" class="btn-primary">Submit Guess</button>
+                        <div id="regimen-eq-result" class="hidden">
+                            <div class="result-card">
+                                <div class="quiz-result-numbers">
+                                    <div class="quiz-number">
+                                        <span class="quiz-number-label">Your Guess</span>
+                                        <span id="regimen-eq-guess-display" class="quiz-number-value">50%</span>
+                                    </div>
+                                    <div class="quiz-number">
+                                        <span class="quiz-number-label">Actual Equity</span>
+                                        <span id="regimen-eq-actual-display" class="quiz-number-value">50%</span>
+                                    </div>
+                                    <div class="quiz-number">
+                                        <span class="quiz-number-label">Error</span>
+                                        <span id="regimen-eq-error-display" class="quiz-number-value">0%</span>
+                                    </div>
+                                </div>
+                                <p id="regimen-eq-result-text" class="result-text"></p>
+                                <p class="quiz-avg-error">Average Error: <strong id="regimen-eq-avg-error">0</strong>%</p>
+                                <button id="regimen-eq-next-btn" class="btn-primary">Next Question</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- EV Calculation Quiz -->
+                    <div id="regimen-ev-quiz" class="regimen-activity hidden">
+                        <div class="scenario-card">
+                            <h3>EV Calculation</h3>
+                            <p class="practice-subtitle">Is this call +EV or -EV?</p>
+                            <div class="regimen-ev-display">
+                                <div class="regimen-ev-item">
+                                    <span class="odds-label">Pot</span>
+                                    <span id="regimen-ev-pot" class="odds-value good"></span>
+                                </div>
+                                <div class="regimen-ev-item">
+                                    <span class="odds-label">Call</span>
+                                    <span id="regimen-ev-call" class="odds-value bad"></span>
+                                </div>
+                                <div class="regimen-ev-item">
+                                    <span class="odds-label">Your Equity</span>
+                                    <span id="regimen-ev-equity" class="odds-value"></span>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="regimen-ev-actions" class="action-buttons">
+                            <button class="btn-scenario-action btn-ev-choice" data-answer="+EV">+EV Call</button>
+                            <button class="btn-scenario-action btn-ev-choice" data-answer="-EV">-EV Fold</button>
+                        </div>
+                        <div id="regimen-ev-result" class="hidden">
+                            <div class="result-card">
+                                <div id="regimen-ev-result-icon" class="result-icon"></div>
+                                <p id="regimen-ev-result-text" class="result-text"></p>
+                                <p id="regimen-ev-explanation" class="result-explanation"></p>
+                                <button id="regimen-ev-next-btn" class="btn-primary">Next Question</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Board Texture Quiz -->
+                    <div id="regimen-board-texture-quiz" class="regimen-activity hidden">
+                        <div class="scenario-card">
+                            <h3>Board Texture</h3>
+                            <p class="practice-subtitle">Classify this flop texture:</p>
+                            <div class="scenario-cards-area">
+                                <div class="scenario-hand">
+                                    <span class="cards-label">Flop</span>
+                                    <div id="regimen-bt-cards" class="card-display"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="regimen-bt-choices" class="regimen-choices"></div>
+                        <div id="regimen-bt-result" class="hidden">
+                            <div class="result-card">
+                                <div id="regimen-bt-result-icon" class="result-icon"></div>
+                                <p id="regimen-bt-result-text" class="result-text"></p>
+                                <p id="regimen-bt-explanation" class="result-explanation"></p>
+                                <button id="regimen-bt-next-btn" class="btn-primary">Next Question</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Bet Sizing Quiz -->
+                    <div id="regimen-bet-sizing-quiz" class="regimen-activity hidden">
+                        <div class="scenario-card">
+                            <h3>Bet Sizing</h3>
+                            <p id="regimen-bs-description" class="scenario-desc"></p>
+                            <div class="scenario-info-row">
+                                <span>Hand: <strong id="regimen-bs-hand"></strong></span>
+                                <span>Board: <strong id="regimen-bs-board"></strong></span>
+                                <span>Pot: <strong id="regimen-bs-pot"></strong></span>
+                            </div>
+                        </div>
+                        <div id="regimen-bs-choices" class="regimen-choices"></div>
+                        <div id="regimen-bs-result" class="hidden">
+                            <div class="result-card">
+                                <div id="regimen-bs-result-icon" class="result-icon"></div>
+                                <p id="regimen-bs-result-text" class="result-text"></p>
+                                <p id="regimen-bs-explanation" class="result-explanation"></p>
+                                <button id="regimen-bs-next-btn" class="btn-primary">Next Question</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Player Type Quiz -->
+                    <div id="regimen-player-type-quiz" class="regimen-activity hidden">
+                        <div class="scenario-card">
+                            <h3>Player Type Identification</h3>
+                            <p class="practice-subtitle">What type of player has these stats?</p>
+                            <div class="regimen-stats-display">
+                                <div class="regimen-stat-item">
+                                    <span class="stat-label">VPIP</span>
+                                    <span id="regimen-pt-vpip" class="stat-value-big"></span>
+                                </div>
+                                <div class="regimen-stat-item">
+                                    <span class="stat-label">PFR</span>
+                                    <span id="regimen-pt-pfr" class="stat-value-big"></span>
+                                </div>
+                                <div class="regimen-stat-item">
+                                    <span class="stat-label">AF</span>
+                                    <span id="regimen-pt-af" class="stat-value-big"></span>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="regimen-pt-choices" class="regimen-choices"></div>
+                        <div id="regimen-pt-result" class="hidden">
+                            <div class="result-card">
+                                <div id="regimen-pt-result-icon" class="result-icon"></div>
+                                <p id="regimen-pt-result-text" class="result-text"></p>
+                                <p id="regimen-pt-explanation" class="result-explanation"></p>
+                                <button id="regimen-pt-next-btn" class="btn-primary">Next Question</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Scenario Activity (routes to existing scenario screen) -->
+                    <div id="regimen-scenario-activity" class="regimen-activity hidden">
+                        <p class="practice-subtitle">Complete all 4 scenario categories with 70%+ accuracy.</p>
+                        <div id="regimen-scenario-categories" class="category-grid"></div>
+                    </div>
+
+                    <!-- Play Activity (Stages 4-6) -->
+                    <div id="regimen-play-activity" class="regimen-activity hidden">
+                        <div class="scenario-card">
+                            <h3 id="regimen-play-title">Guided Play</h3>
+                            <p id="regimen-play-desc" class="scenario-desc"></p>
+                            <div class="regimen-play-config">
+                                <h4>Training Aids:</h4>
+                                <div id="regimen-play-aids-list" class="regimen-aids-list"></div>
+                            </div>
+                            <div class="regimen-play-progress">
+                                <span>Hands: <strong id="regimen-play-hands">0</strong> / <strong id="regimen-play-target">15</strong></span>
+                                <span id="regimen-play-profit-display"></span>
+                            </div>
+                        </div>
+                        <button id="regimen-play-start-btn" class="btn-primary">Start Playing</button>
+                    </div>
+
+                    <!-- Stage Complete -->
+                    <div id="regimen-stage-complete" class="regimen-activity hidden">
+                        <div class="result-card">
+                            <div class="result-icon" style="color: #4a9; font-size: 20px; font-weight: 700;">Stage Complete!</div>
+                            <p id="regimen-complete-text" class="result-text correct"></p>
+                            <button id="regimen-complete-next-btn" class="btn-primary">Continue to Next Stage</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="js/main.js"></script>
+</body>
+</html>
