@@ -236,11 +236,75 @@ body {
     letter-spacing: 1px;
 }
 
+.pot-chips {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.chip-stack {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+    position: relative;
+    width: 20px;
+    height: 18px;
+}
+
+.chip {
+    width: 18px;
+    height: 6px;
+    border-radius: 50%;
+    position: absolute;
+    border: 1px solid rgba(255,255,255,0.3);
+}
+
+.chip.chip-gold {
+    background: linear-gradient(180deg, #ffd700, #daa520);
+    top: 0;
+    z-index: 3;
+}
+
+.chip.chip-red {
+    background: linear-gradient(180deg, #e55, #b33);
+    top: 4px;
+    z-index: 2;
+}
+
+.chip.chip-blue {
+    background: linear-gradient(180deg, #4488cc, #2a5a8c);
+    top: 8px;
+    z-index: 1;
+}
+
 #pot-amount {
     font-size: 20px;
     font-weight: 700;
     color: #ffd700;
     text-shadow: 0 1px 4px rgba(0,0,0,0.5);
+}
+
+/* ── Chip Icons (inline with bets/chips) ─────────────────────────────── */
+
+.chip-icon {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #ffd700, #daa520);
+    border: 1.5px solid rgba(255,255,255,0.4);
+    vertical-align: middle;
+    margin-right: 3px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.3);
+}
+
+.chip-icon.chip-small {
+    width: 10px;
+    height: 10px;
+    background: linear-gradient(135deg, #4a9, #2a7a4a);
+    margin-right: 2px;
 }
 
 /* ── Player Seats ─────────────────────────────────────────────────────── */
@@ -264,7 +328,7 @@ body {
 
 .player-seat.current-turn .player-info {
     border-color: #ffd700;
-    box-shadow: 0 0 12px rgba(255, 215, 0, 0.4);
+    animation: pulseGlow 1.5s infinite ease-in-out;
 }
 
 .player-info {
@@ -288,6 +352,21 @@ body {
 .player-avatar {
     font-size: 20px;
     margin-bottom: 2px;
+}
+
+.player-avatar.avatar-circle {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 2px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #fff;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+    border: 2px solid rgba(255,255,255,0.2);
 }
 
 .player-name {
@@ -1547,6 +1626,220 @@ body {
 .legend-swatch.tier-5 { background: #6a5a1a; }
 .legend-swatch.tier-fold { background: #2a2a2a; }
 
+/* ── Multiplayer Lobby ────────────────────────────────────────────────── */
+
+#multiplayer-lobby {
+    align-items: center;
+    justify-content: center;
+    background: radial-gradient(ellipse at center, #162030 0%, #0d1117 70%);
+}
+
+.btn-multiplayer {
+    background: linear-gradient(135deg, #2a5a8c, #4488cc);
+    margin-top: 8px;
+}
+
+.btn-multiplayer:hover {
+    box-shadow: 0 4px 20px rgba(68, 136, 204, 0.4);
+}
+
+.mp-section {
+    margin-top: 20px;
+}
+
+.mp-section-title {
+    font-size: 15px;
+    color: #ccc;
+    margin-bottom: 12px;
+    font-weight: 600;
+}
+
+.mp-divider {
+    display: flex;
+    align-items: center;
+    margin: 24px 0;
+    color: #666;
+    font-size: 14px;
+}
+
+.mp-divider::before,
+.mp-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: #333;
+}
+
+.mp-divider span {
+    padding: 0 16px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-weight: 600;
+}
+
+.room-code-input {
+    text-align: center;
+    font-size: 24px !important;
+    letter-spacing: 8px;
+    text-transform: uppercase;
+    font-weight: 700;
+}
+
+.lobby-error {
+    margin-top: 16px;
+    padding: 10px 16px;
+    background: rgba(235, 85, 85, 0.15);
+    border: 1px solid #e55;
+    border-radius: 8px;
+    color: #e88;
+    font-size: 14px;
+    text-align: center;
+}
+
+.lobby-back-btn {
+    display: block;
+    margin: 20px auto 0;
+}
+
+/* ── Waiting Room ────────────────────────────────────────────────────── */
+
+#waiting-room {
+    align-items: center;
+    justify-content: center;
+    background: radial-gradient(ellipse at center, #162030 0%, #0d1117 70%);
+}
+
+.waiting-room-container {
+    max-width: 450px;
+}
+
+.waiting-title {
+    font-size: 24px;
+    color: #fff;
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.room-code-box {
+    text-align: center;
+    padding: 16px 24px;
+    background: #1a2030;
+    border: 2px solid #4a9;
+    border-radius: 12px;
+    margin-bottom: 16px;
+    cursor: pointer;
+    transition: border-color 0.2s;
+}
+
+.room-code-box:hover {
+    border-color: #6cb;
+}
+
+.room-code-label {
+    display: block;
+    font-size: 11px;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+}
+
+.room-code-value {
+    font-size: 36px;
+    font-weight: 700;
+    color: #4a9;
+    letter-spacing: 8px;
+    font-family: 'Courier New', Courier, monospace;
+}
+
+.room-status {
+    text-align: center;
+    font-size: 14px;
+    color: #888;
+    margin-bottom: 16px;
+}
+
+.player-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 20px;
+}
+
+.player-list-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    background: #1a2030;
+    border: 1px solid #2a3a4a;
+    border-radius: 8px;
+}
+
+.player-list-item .avatar-circle {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 700;
+    color: #fff;
+    flex-shrink: 0;
+}
+
+.player-list-name {
+    flex: 1;
+    font-size: 15px;
+    color: #fff;
+    font-weight: 500;
+}
+
+.player-list-host {
+    font-size: 11px;
+    color: #ffd700;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.player-list-seat {
+    font-size: 12px;
+    color: #888;
+}
+
+/* ── Multiplayer Turn Timer ──────────────────────────────────────────── */
+
+.turn-timer {
+    position: absolute;
+    bottom: -4px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 80px;
+    height: 4px;
+    background: #2a3a4a;
+    border-radius: 2px;
+    overflow: hidden;
+    z-index: 10;
+}
+
+.turn-timer-bar {
+    height: 100%;
+    background: #4a9;
+    border-radius: 2px;
+    transition: width 1s linear, background-color 0.5s;
+    width: 100%;
+}
+
+.turn-timer-bar.warning {
+    background: #da7;
+}
+
+.turn-timer-bar.critical {
+    background: #e55;
+}
+
 /* ── Responsive ───────────────────────────────────────────────────────── */
 
 @media (max-width: 900px) {
@@ -1560,13 +1853,13 @@ body {
     }
 
     .card {
-        width: 48px;
-        height: 68px;
+        width: 50px;
+        height: 72px;
     }
 
     .card-slot {
-        width: 48px;
-        height: 68px;
+        width: 50px;
+        height: 72px;
     }
 
     .player-seat {

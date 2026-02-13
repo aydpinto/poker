@@ -66,6 +66,15 @@ export class HumanPlayer extends Player {
     }
 }
 
+export class MultiplayerPlayer extends Player {
+    constructor(name, chips, seatIndex, socketId) {
+        super(name, chips, seatIndex);
+        this.isHuman = true;
+        this.socketId = socketId;
+        this.disconnected = false;
+    }
+}
+
 export class AIPlayer extends Player {
     constructor(name, chips, seatIndex, persona, difficulty) {
         super(name, chips, seatIndex);

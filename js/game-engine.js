@@ -1,7 +1,6 @@
 import { PHASES, ACTIONS, EventEmitter, delay } from './utils.js';
 import { Deck } from './deck.js';
 import { HandEvaluator } from './hand-evaluator.js';
-import { AIBrain } from './ai-brain.js';
 
 export class GameEngine extends EventEmitter {
     constructor(players, config = {}) {
@@ -514,6 +513,9 @@ export class GameEngine extends EventEmitter {
             const thinkTime = this.getAIThinkTime(player, validActions);
             await delay(thinkTime);
         }
+
+        // Dynamic import so this file works on the server without AI deps
+        const { AIBrain } = await import('./ai-brain.js');
 
         const gameState = this.getGameState();
         gameState.validActions = validActions;

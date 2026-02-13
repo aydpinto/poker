@@ -1,89 +1,164 @@
 /* ── Cards CSS ─────────────────────────────────────────────────────────── */
 
 .card {
-    width: 58px;
-    height: 82px;
-    border-radius: 6px;
-    background: #fff;
-    border: 1.5px solid #999;
-    box-shadow: 1px 2px 6px rgba(0,0,0,0.25);
+    width: 62px;
+    height: 88px;
+    border-radius: 7px;
+    background: linear-gradient(145deg, #fff 0%, #f5f5f0 100%);
+    border: 1.5px solid #aaa;
+    box-shadow: 1px 2px 6px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.8);
     display: inline-flex;
     flex-direction: column;
     justify-content: space-between;
-    padding: 3px 5px;
+    padding: 3px 4px;
     font-family: 'Georgia', 'Times New Roman', serif;
     position: relative;
     transition: transform 0.3s ease, opacity 0.3s ease;
     user-select: none;
     flex-shrink: 0;
+    overflow: hidden;
 }
 
 .card.small {
-    width: 44px;
-    height: 62px;
+    width: 46px;
+    height: 66px;
     padding: 2px 3px;
-    border-radius: 4px;
+    border-radius: 5px;
 }
 
-.card.small .rank {
-    font-size: 12px;
-}
+/* ── Colors ────────────────────────────────────────────────────────────── */
 
-.card.small .suit {
-    font-size: 16px;
-}
+.card.red { color: #cc0000; }
+.card.black { color: #1a1a1a; }
 
-.card.red {
-    color: #cc0000;
-}
+/* ── Corner indices ───────────────────────────────────────────────────── */
 
-.card.black {
-    color: #111;
-}
-
-.card .rank {
-    font-size: 15px;
-    font-weight: bold;
+.card-corner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
     line-height: 1;
+    gap: 0;
+    z-index: 2;
 }
 
-.card .suit {
-    font-size: 20px;
-    text-align: center;
-    line-height: 1;
+.card-corner.top-left {
+    align-self: flex-start;
 }
 
-.card .bottom-rank {
-    font-size: 15px;
-    font-weight: bold;
-    line-height: 1;
-    text-align: right;
+.card-corner.bottom-right {
+    align-self: flex-end;
     transform: rotate(180deg);
 }
 
-.card.small .bottom-rank {
-    display: none;
+.corner-rank {
+    font-size: 14px;
+    font-weight: bold;
+    line-height: 1;
 }
 
-/* Face down card */
+.corner-suit {
+    font-size: 10px;
+    line-height: 1;
+    margin-top: -1px;
+}
+
+/* Small card corners */
+.card.small .corner-rank {
+    font-size: 11px;
+}
+
+.card.small .corner-suit {
+    font-size: 8px;
+}
+
+/* ── Card center ──────────────────────────────────────────────────────── */
+
+.card-center {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1;
+}
+
+.center-pip {
+    font-size: 26px;
+    line-height: 1;
+    opacity: 0.85;
+}
+
+.card.small .center-pip {
+    font-size: 20px;
+}
+
+/* Face cards get a special center treatment */
+.card-center.face-card {
+    flex-direction: column;
+    gap: 0;
+}
+
+.face-letter {
+    font-size: 22px;
+    font-weight: 900;
+    line-height: 1;
+    opacity: 0.15;
+    font-family: 'Georgia', serif;
+}
+
+.card.small .face-letter {
+    font-size: 16px;
+}
+
+/* Ace gets extra large center pip */
+.card-center.ace-card .center-pip {
+    font-size: 34px;
+    opacity: 0.9;
+}
+
+.card.small .card-center.ace-card .center-pip {
+    font-size: 26px;
+}
+
+/* ── Face down card ───────────────────────────────────────────────────── */
+
 .card.face-down {
-    background: linear-gradient(135deg,
-        #1a3a6c 25%, #2a5a9c 25%,
-        #2a5a9c 50%, #1a3a6c 50%,
-        #1a3a6c 75%, #2a5a9c 75%);
-    background-size: 8px 8px;
+    background:
+        repeating-linear-gradient(
+            45deg,
+            #1a3a6c,
+            #1a3a6c 4px,
+            #2a5a9c 4px,
+            #2a5a9c 8px
+        );
     border-color: #0a2a5c;
     color: transparent;
     box-shadow: 1px 2px 6px rgba(0,0,0,0.4);
 }
 
-.card.face-down .rank,
-.card.face-down .suit,
-.card.face-down .bottom-rank {
+/* Add a centered diamond pattern on face-down cards */
+.card.face-down::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) rotate(45deg);
+    width: 24px;
+    height: 24px;
+    border: 2px solid rgba(255,255,255,0.15);
+    border-radius: 3px;
+}
+
+.card.face-down .card-corner,
+.card.face-down .card-center {
     visibility: hidden;
 }
 
-/* Card dealing animation */
+/* ── Card dealing animation ───────────────────────────────────────────── */
+
 .card.dealing {
     animation: dealCard 0.3s ease-out;
 }
@@ -99,7 +174,8 @@
     }
 }
 
-/* Card reveal animation */
+/* ── Card reveal animation ────────────────────────────────────────────── */
+
 .card.revealing {
     animation: revealCard 0.4s ease-in-out;
 }
@@ -110,18 +186,20 @@
     100% { transform: scaleX(1); }
 }
 
-/* Highlight winning cards */
+/* ── Highlight winning cards ──────────────────────────────────────────── */
+
 .card.winner {
-    box-shadow: 0 0 12px 3px #ffd700;
+    box-shadow: 0 0 12px 3px #ffd700, 0 0 24px 6px rgba(255, 215, 0, 0.3);
     border-color: #ffd700;
 }
 
-/* Community card slots */
+/* ── Community card slots ─────────────────────────────────────────────── */
+
 .card-slot {
-    width: 58px;
-    height: 82px;
-    border-radius: 6px;
-    border: 2px dashed rgba(255,255,255,0.15);
+    width: 62px;
+    height: 88px;
+    border-radius: 7px;
+    border: 2px dashed rgba(255,255,255,0.12);
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -134,4 +212,29 @@
     top: 0;
     left: 0;
     margin: 0;
+}
+
+/* ── Card hover effect (human player's hole cards) ────────────────────── */
+
+#seat-0 .player-cards .card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease, z-index 0s;
+    cursor: pointer;
+}
+
+#seat-0 .player-cards .card:hover {
+    transform: scale(1.35) translateY(-8px);
+    z-index: 20;
+    box-shadow: 0 8px 25px rgba(0,0,0,0.5);
+    border-color: #ffd700;
+}
+
+/* ── Pulsing turn indicator ───────────────────────────────────────────── */
+
+@keyframes pulseGlow {
+    0%, 100% {
+        box-shadow: 0 0 8px rgba(255, 215, 0, 0.4);
+    }
+    50% {
+        box-shadow: 0 0 20px rgba(255, 215, 0, 0.7), 0 0 40px rgba(255, 215, 0, 0.2);
+    }
 }

@@ -56,6 +56,7 @@
                     </div>
 
                     <button id="start-game-btn" class="btn-primary">Start Game</button>
+                    <button id="multiplayer-btn" class="btn-primary btn-multiplayer">Multiplayer</button>
 
                     <div class="practice-section">
                         <p class="practice-label">Training</p>
@@ -122,7 +123,14 @@
                     <!-- Pot Display -->
                     <div id="pot-display">
                         <span class="pot-label">Pot</span>
-                        <span id="pot-amount">0</span>
+                        <div class="pot-chips">
+                            <span class="chip-stack">
+                                <span class="chip chip-gold"></span>
+                                <span class="chip chip-red"></span>
+                                <span class="chip chip-blue"></span>
+                            </span>
+                            <span id="pot-amount">0</span>
+                        </div>
                     </div>
 
                     <!-- Player Seats (positioned via CSS) -->
@@ -830,8 +838,74 @@
                 </div>
             </div>
         </div>
+        <!-- ── Multiplayer Lobby Screen ──────────────────────────────── -->
+        <div id="multiplayer-lobby" class="screen">
+            <div class="start-container">
+                <h1 class="title">Multiplayer</h1>
+                <p class="subtitle">Play with friends</p>
+
+                <div class="setup-form">
+                    <div class="form-group">
+                        <label for="mp-player-name">Your Name</label>
+                        <input type="text" id="mp-player-name" value="Player" maxlength="12">
+                    </div>
+
+                    <div class="mp-section">
+                        <h3 class="mp-section-title">Create a Room</h3>
+                        <div class="form-group" id="mp-chips-selector">
+                            <label>Starting Chips</label>
+                            <div class="selector-row">
+                                <button class="selector-btn" data-value="500">500</button>
+                                <button class="selector-btn active" data-value="1000">1,000</button>
+                                <button class="selector-btn" data-value="2000">2,000</button>
+                                <button class="selector-btn" data-value="5000">5,000</button>
+                            </div>
+                        </div>
+                        <div class="form-group" id="mp-blinds-selector">
+                            <label>Blinds</label>
+                            <div class="selector-row">
+                                <button class="selector-btn" data-sb="5" data-bb="10" data-value="5/10">5/10</button>
+                                <button class="selector-btn active" data-sb="10" data-bb="20" data-value="10/20">10/20</button>
+                                <button class="selector-btn" data-sb="25" data-bb="50" data-value="25/50">25/50</button>
+                            </div>
+                        </div>
+                        <button id="create-room-btn" class="btn-primary">Create Room</button>
+                    </div>
+
+                    <div class="mp-divider"><span>or</span></div>
+
+                    <div class="mp-section">
+                        <h3 class="mp-section-title">Join a Room</h3>
+                        <div class="form-group">
+                            <label for="room-code-input">Room Code</label>
+                            <input type="text" id="room-code-input" placeholder="ABCD" maxlength="4" class="room-code-input">
+                        </div>
+                        <button id="join-room-btn" class="btn-primary">Join Room</button>
+                    </div>
+
+                    <div id="lobby-error" class="lobby-error hidden"></div>
+                    <button id="lobby-back-btn" class="btn-small lobby-back-btn">Back</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── Waiting Room Screen ────────────────────────────────────── -->
+        <div id="waiting-room" class="screen">
+            <div class="start-container waiting-room-container">
+                <h2 class="waiting-title">Waiting Room</h2>
+                <div class="room-code-box">
+                    <span class="room-code-label">Room Code</span>
+                    <span id="room-code-display" class="room-code-value">----</span>
+                </div>
+                <div id="room-status" class="room-status">0/8 players</div>
+                <div id="player-list" class="player-list"></div>
+                <button id="start-mp-game-btn" class="btn-primary hidden">Start Game</button>
+                <button id="leave-room-btn" class="btn-small lobby-back-btn">Leave Room</button>
+            </div>
+        </div>
     </div>
 
+    <script src="/socket.io/socket.io.js"></script>
     <script type="module" src="js/main.js"></script>
 </body>
 </html>

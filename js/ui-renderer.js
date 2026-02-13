@@ -12,6 +12,16 @@ export class UIRenderer {
         this.pot = 0;
         this.quipTimeouts = {};
 
+        // Multiplayer state
+        this.isMultiplayer = false;
+        this.socketClient = null;
+        this.localSeatIndex = -1;
+        this.playersState = [];
+        this.localHoleCards = [];
+        this.communityCards = [];
+        this.actionTimer = null;
+        this.actionTimerInterval = null;
+
         // Training aids state
         this.trainingAids = {
             odds: true,
@@ -25,8 +35,417 @@ export class UIRenderer {
     init(engine, humanPlayer) {
         this.engine = engine;
         this.humanPlayer = humanPlayer;
+        this.isMultiplayer = false;
         this.bindEngineEvents();
         this.bindControls();
+    }
+
+    // ── Card Hydration (for multiplayer socket data) ────────────────────
+
+    hydrateCard(card) {
+        return {
+            rank: card.rank,
+            suit: card.suit,
+            rankName: RANK_NAMES[card.rank] || String(card.rank),
+            suitSymbol: SUIT_SYMBOLS[card.suit] || card.suit,
+            color: (card.suit === 'hearts' || card.suit === 'diamonds') ? 'red' : 'black'
+        };
+    }
+
+    // ── Multiplayer Init ─────────────────────────────────────────────────
+
+    initMultiplayer(socketClient, localSeatIndex, players, config) {
+        this.isMultiplayer = true;
+        this.socketClient = socketClient;
+        this.localSeatIndex = localSeatIndex;
+        this.engine = null;
+        this.humanPlayer = null;
+        this.playersState = players;
+        this.localHoleCards = [];
+        this.communityCards = [];
+
+        // Disable training aids in multiplayer
+        this.trainingAids = { odds: false, coach: false, position: false, handChart: false };
+
+        // Hide training panel
+        const trainingPanel = document.getElementById('training-aids-panel');
+        if (trainingPanel) trainingPanel.classList.add('hidden');
+
+        this.bindControls();
+        this.bindMultiplayerEvents();
+        this.showScreen('game-screen');
+    }
+
+    bindMultiplayerEvents() {
+        const sc = this.socketClient;
+
+        sc.on('handStart', (data) => {
+            this.playersState = data.players;
+            document.getElementById('hand-number-display').textContent = `Hand #${data.handNumber}`;
+
+            // Clear community cards
+            this.communityCards = [];
+            for (let i = 0; i < 5; i++) {
+                document.getElementById(`cc-${i}`).innerHTML = '';
+            }
+
+            this.updatePot(0);
+            document.getElementById('game-message').classList.add('hidden');
+            document.getElementById('continue-controls').classList.add('hidden');
+
+            this.renderAllSeatsMultiplayer(data.players);
+        });
+
+        sc.on('blindsPosted', (data) => {
+            this.updatePot(data.pot);
+            // Update player states with blind bets and chips
+            if (data.playerChips) {
+                for (const pc of data.playerChips) {
+                    const p = this.playersState.find(pl => pl.seatIndex === pc.seatIndex);
+                    if (p) p.chips = pc.chips;
+                }
+            }
+            for (const p of this.playersState) {
+                if (p.seatIndex === data.smallBlind.seatIndex) p.currentBet = data.smallBlind.amount;
+                if (p.seatIndex === data.bigBlind.seatIndex) p.currentBet = data.bigBlind.amount;
+            }
+            this.renderAllSeatsMultiplayer(this.playersState);
+        });
+
+        sc.on('holeCardsDealt', (data) => {
+            this.localHoleCards = data.yourCards.map(c => this.hydrateCard(c));
+            // Render cards for all players
+            for (const p of data.players) {
+                const container = document.getElementById(`cards-${p.seatIndex}`);
+                if (!container) continue;
+                container.innerHTML = '';
+
+                if (p.seatIndex === this.localSeatIndex) {
+                    // Show our cards face-up
+                    for (const card of this.localHoleCards) {
+                        const cardEl = this.createCardElement(card, false, true);
+                        cardEl.classList.add('dealing');
+                        container.appendChild(cardEl);
+                    }
+                } else if (p.hasCards) {
+                    // Show face-down cards for opponents
+                    for (let i = 0; i < 2; i++) {
+                        const cardEl = this.createCardElement({}, true, true);
+                        cardEl.classList.add('dealing');
+                        container.appendChild(cardEl);
+                    }
+                }
+            }
+
+            // Update hand strength for local player
+            this.updateHandStrengthMultiplayer();
+        });
+
+        sc.on('communityCardsDealt', (data) => {
+            this.communityCards = data.cards.map(c => this.hydrateCard(c));
+            this.renderCommunityCards(this.communityCards);
+            this.updateHandStrengthMultiplayer();
+            // Reset bet displays after pot collection
+            for (const p of this.playersState) p.currentBet = 0;
+            this.renderAllSeatsMultiplayer(this.playersState);
+        });
+
+        sc.on('phaseChange', () => {
+            document.querySelectorAll('.player-action-indicator').forEach(el => {
+                el.classList.remove('visible');
+            });
+        });
+
+        sc.on('playerTurn', (data) => {
+            // Remove previous turn highlights
+            document.querySelectorAll('.player-seat').forEach(el => el.classList.remove('current-turn'));
+            const seatEl = document.getElementById(`seat-${data.seatIndex}`);
+            if (seatEl) seatEl.classList.add('current-turn');
+        });
+
+        sc.on('awaitingAction', (data) => {
+            this.showControlsMultiplayer(data);
+            this.startActionCountdown(data.timeLimit || 30000);
+        });
+
+        sc.on('playerActed', (data) => {
+            this.updatePot(data.pot);
+
+            // Update player state
+            const ps = this.playersState.find(p => p.seatIndex === data.seatIndex);
+            if (ps) {
+                ps.chips = data.playerChips;
+                ps.currentBet = data.playerCurrentBet;
+                ps.hasFolded = data.hasFolded;
+                ps.isAllIn = data.isAllIn;
+            }
+            this.renderSeatMultiplayer(ps || { seatIndex: data.seatIndex, name: data.playerName, chips: data.playerChips ?? 0 });
+
+            // Show action indicator
+            const el = document.getElementById(`action-${data.seatIndex}`);
+            if (el) {
+                let label = data.action.toUpperCase();
+                if ((data.action === 'raise' || data.action === 'call') && data.amount > 0) {
+                    label += ` ${formatChips(data.amount)}`;
+                }
+                el.textContent = label;
+                el.className = `player-action-indicator action-${data.action.replace('-', '')} visible`;
+                setTimeout(() => el.classList.remove('visible'), 2000);
+            }
+
+            // Remove turn highlight
+            const seatEl = document.getElementById(`seat-${data.seatIndex}`);
+            if (seatEl) seatEl.classList.remove('current-turn');
+        });
+
+        sc.on('handEnd', (data) => {
+            // Update chip counts
+            if (data.playerChips) {
+                for (const pc of data.playerChips) {
+                    const ps = this.playersState.find(p => p.seatIndex === pc.seatIndex);
+                    if (ps) ps.chips = pc.chips;
+                }
+            }
+
+            // Reveal hands at showdown
+            if (data.showdown && data.allHands) {
+                for (const h of data.allHands) {
+                    const container = document.getElementById(`cards-${h.seatIndex}`);
+                    if (!container) continue;
+                    container.innerHTML = '';
+                    for (const card of h.cards) {
+                        const cardEl = this.createCardElement(this.hydrateCard(card), false, true);
+                        container.appendChild(cardEl);
+                    }
+                }
+            }
+
+            if (data.communityCards) {
+                this.communityCards = data.communityCards.map(c => this.hydrateCard(c));
+                this.renderCommunityCards(this.communityCards);
+            }
+
+            // Show winner message
+            let message = '';
+            if (data.winners.length === 1) {
+                const w = data.winners[0];
+                const handName = w.handName ? ` with ${w.handName}` : '';
+                message = `${w.playerName} wins ${formatChips(w.amount)}${handName}`;
+            } else {
+                const names = data.winners.map(w => w.playerName).join(', ');
+                message = `Split pot! ${names}`;
+            }
+            this.showMessage(message);
+
+            // Reset bets and re-render
+            for (const p of this.playersState) p.currentBet = 0;
+            this.renderAllSeatsMultiplayer(this.playersState);
+            this.updateHandStrengthMultiplayer();
+        });
+
+        sc.on('playerEliminated', (data) => {
+            const ps = this.playersState.find(p => p.seatIndex === data.seatIndex);
+            if (ps) ps.isBusted = true;
+            this.renderSeatMultiplayer(ps || { seatIndex: data.seatIndex, name: data.playerName, isBusted: true });
+        });
+
+        sc.on('gameOver', (data) => {
+            const isLocalWinner = data.winnerSeatIndex === this.localSeatIndex;
+            const message = isLocalWinner
+                ? `You win the game! Congratulations!`
+                : `${data.winnerName} wins the game!`;
+            this.showMessage(message);
+
+            document.getElementById('continue-controls').classList.remove('hidden');
+            document.getElementById('btn-continue').textContent = 'Back to Lobby';
+            document.getElementById('btn-continue').onclick = () => {
+                this.isMultiplayer = false;
+                this.showScreen('start-screen');
+            };
+        });
+
+        sc.on('nextHand', () => {
+            document.getElementById('game-message').classList.add('hidden');
+        });
+
+        sc.on('actionTimeout', (data) => {
+            const seatEl = document.getElementById(`seat-${data.seatIndex}`);
+            if (seatEl) seatEl.classList.remove('current-turn');
+        });
+
+        sc.on('playerDisconnected', (data) => {
+            const ps = this.playersState.find(p => p.seatIndex === data.seatIndex);
+            if (ps) ps.disconnected = true;
+            this.renderSeatMultiplayer(ps || { seatIndex: data.seatIndex, name: data.playerName, chips: 0 });
+        });
+    }
+
+    // ── Multiplayer Rendering Helpers ─────────────────────────────────────
+
+    renderAllSeatsMultiplayer(players) {
+        for (let i = 0; i < 8; i++) {
+            const el = document.getElementById(`seat-${i}`);
+            el.classList.remove('active');
+            el.innerHTML = '';
+        }
+        for (const p of players) {
+            this.renderSeatMultiplayer(p);
+        }
+    }
+
+    renderSeatMultiplayer(player) {
+        const seat = document.getElementById(`seat-${player.seatIndex}`);
+        if (!seat) return;
+        seat.classList.add('active');
+
+        const initials = player.name.split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase();
+        const hue = (player.name.charCodeAt(0) * 37 + (player.name.charCodeAt(1) || 0) * 17) % 360;
+        const avatarHTML = `<div class="player-avatar avatar-circle" style="background: hsl(${hue}, 55%, 40%)">${initials}</div>`;
+
+        const stateClass = player.isBusted ? 'busted' : (player.hasFolded ? 'folded' : '');
+
+        let badges = '';
+        if (player.isDealer) badges += '<span class="badge badge-dealer">D</span>';
+        if (player.isSmallBlind) badges += '<span class="badge badge-sb">SB</span>';
+        if (player.isBigBlind) badges += '<span class="badge badge-bb">BB</span>';
+
+        let betHTML = '';
+        if (player.currentBet > 0) {
+            betHTML = `<span class="chip-icon"></span>${formatChips(player.currentBet)}`;
+        }
+
+        const disconnectedBadge = player.disconnected ? '<span style="color:#e55;font-size:11px"> (DC)</span>' : '';
+
+        seat.innerHTML = `
+            <div class="player-quip" id="quip-${player.seatIndex}"></div>
+            <div class="player-cards" id="cards-${player.seatIndex}"></div>
+            <div class="player-info ${stateClass}">
+                ${avatarHTML}
+                <div class="player-name">${player.name}${disconnectedBadge}</div>
+                <div class="player-chips"><span class="chip-icon chip-small"></span>${player.isBusted ? 'BUSTED' : formatChips(player.chips ?? 0)}</div>
+                <div class="player-status">${badges}</div>
+            </div>
+            <div class="player-bet-display">${betHTML}</div>
+            <div class="player-action-indicator" id="action-${player.seatIndex}"></div>
+        `;
+    }
+
+    showControlsMultiplayer(data) {
+        const { validActions, callAmount, minRaise, maxRaise, pot } = data;
+        this.callAmount = callAmount;
+        this.raiseMin = minRaise;
+        this.raiseMax = maxRaise;
+        this.pot = pot;
+
+        // Find local player's chips from playersState
+        const localPlayer = this.playersState.find(p => p.seatIndex === this.localSeatIndex);
+        const localChips = localPlayer ? localPlayer.chips : 0;
+
+        const controls = document.getElementById('controls');
+        controls.classList.remove('hidden');
+
+        const btnFold = document.getElementById('btn-fold');
+        const btnCheck = document.getElementById('btn-check');
+        const btnCall = document.getElementById('btn-call');
+        const btnAllin = document.getElementById('btn-allin');
+        const raiseControls = document.getElementById('raise-controls');
+
+        btnFold.classList.add('hidden');
+        btnCheck.classList.add('hidden');
+        btnCall.classList.add('hidden');
+        raiseControls.style.display = 'none';
+        btnAllin.classList.add('hidden');
+
+        const hasCheck = validActions.some(a => a.type === 'check');
+        const hasCall = validActions.some(a => a.type === 'call');
+        const hasFold = validActions.some(a => a.type === 'fold');
+        const hasRaise = validActions.some(a => a.type === 'raise');
+
+        if (hasFold) btnFold.classList.remove('hidden');
+        if (hasCheck) btnCheck.classList.remove('hidden');
+
+        if (hasCall) {
+            btnCall.classList.remove('hidden');
+            document.getElementById('call-amount').textContent = formatChips(callAmount);
+        }
+
+        if (hasRaise) {
+            raiseControls.style.display = 'flex';
+            const slider = document.getElementById('raise-slider');
+            slider.value = 30;
+            this.currentRaiseValue = Math.round(this.raiseMin + (this.raiseMax - this.raiseMin) * 0.3);
+            this.updateRaiseDisplay();
+        }
+
+        btnAllin.classList.remove('hidden');
+        btnAllin.textContent = `All In (${formatChips(localChips)})`;
+    }
+
+    startActionCountdown(timeLimit) {
+        this.clearActionCountdown();
+        const startTime = Date.now();
+        const seatEl = document.getElementById(`seat-${this.localSeatIndex}`);
+
+        // Add timer bar to seat
+        let timerEl = seatEl?.querySelector('.turn-timer');
+        if (!timerEl && seatEl) {
+            timerEl = document.createElement('div');
+            timerEl.className = 'turn-timer';
+            timerEl.innerHTML = '<div class="turn-timer-bar"></div>';
+            seatEl.querySelector('.player-info')?.appendChild(timerEl);
+        }
+
+        this.actionTimerInterval = setInterval(() => {
+            const elapsed = Date.now() - startTime;
+            const remaining = Math.max(0, timeLimit - elapsed);
+            const pct = (remaining / timeLimit) * 100;
+
+            const bar = timerEl?.querySelector('.turn-timer-bar');
+            if (bar) {
+                bar.style.width = `${pct}%`;
+                bar.classList.remove('warning', 'critical');
+                if (pct < 20) bar.classList.add('critical');
+                else if (pct < 50) bar.classList.add('warning');
+            }
+
+            if (remaining <= 0) {
+                this.clearActionCountdown();
+            }
+        }, 200);
+    }
+
+    clearActionCountdown() {
+        if (this.actionTimerInterval) {
+            clearInterval(this.actionTimerInterval);
+            this.actionTimerInterval = null;
+        }
+        // Remove timer bars
+        document.querySelectorAll('.turn-timer').forEach(el => el.remove());
+    }
+
+    updateHandStrengthMultiplayer() {
+        const display = document.getElementById('hand-strength-display');
+        const text = document.getElementById('hand-strength-text');
+
+        if (!this.localHoleCards || this.localHoleCards.length < 2) {
+            display.classList.add('hidden');
+            return;
+        }
+
+        display.classList.remove('hidden');
+
+        if (this.communityCards.length >= 3) {
+            const hand = HandEvaluator.bestHandFromHole(this.localHoleCards, this.communityCards);
+            text.textContent = `Your Hand: ${hand.name}`;
+        } else {
+            const c1 = this.localHoleCards[0];
+            const c2 = this.localHoleCards[1];
+            const s1 = SUIT_SYMBOLS[c1.suit] || c1.suit;
+            const s2 = SUIT_SYMBOLS[c2.suit] || c2.suit;
+            const r1 = RANK_NAMES[c1.rank] || c1.rank;
+            const r2 = RANK_NAMES[c2.rank] || c2.rank;
+            text.textContent = `Your Cards: ${r1}${s1} ${r2}${s2}`;
+        }
     }
 
     // ── Engine Event Bindings ──────────────────────────────────────────────
@@ -47,6 +466,9 @@ export class UIRenderer {
     // ── Control Bindings ───────────────────────────────────────────────────
 
     bindControls() {
+        if (this._controlsBound) return;
+        this._controlsBound = true;
+
         document.getElementById('btn-fold').addEventListener('click', () => {
             this.submitAction('fold', 0);
         });
@@ -64,7 +486,10 @@ export class UIRenderer {
         });
 
         document.getElementById('btn-allin').addEventListener('click', () => {
-            this.submitAction('all-in', this.humanPlayer.chips);
+            const chips = this.isMultiplayer
+                ? (this.playersState.find(p => p.seatIndex === this.localSeatIndex)?.chips || 0)
+                : this.humanPlayer.chips;
+            this.submitAction('all-in', chips);
         });
 
         // Raise slider
@@ -95,7 +520,12 @@ export class UIRenderer {
 
     submitAction(action, amount) {
         this.hideControls();
-        this.engine.submitHumanAction(action, amount);
+        if (this.isMultiplayer) {
+            this.clearActionCountdown();
+            this.socketClient.submitAction(action, amount);
+        } else {
+            this.engine.submitHumanAction(action, amount);
+        }
     }
 
     // ── Event Handlers ─────────────────────────────────────────────────────
@@ -292,7 +722,16 @@ export class UIRenderer {
 
         seat.classList.add('active');
 
-        const avatar = player.persona ? player.persona.avatar : '🎯';
+        // Avatar: colored initials circle for human, emoji for AI
+        let avatarHTML;
+        if (player.persona && player.persona.avatar) {
+            avatarHTML = `<div class="player-avatar">${player.persona.avatar}</div>`;
+        } else {
+            const initials = player.name.split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase();
+            const hue = (player.name.charCodeAt(0) * 37 + (player.name.charCodeAt(1) || 0) * 17) % 360;
+            avatarHTML = `<div class="player-avatar avatar-circle" style="background: hsl(${hue}, 55%, 40%)">${initials}</div>`;
+        }
+
         const stateClass = player.isBusted ? 'busted' : (player.hasFolded ? 'folded' : '');
 
         // Status badges
@@ -301,19 +740,22 @@ export class UIRenderer {
         if (player.isSmallBlind) badges += '<span class="badge badge-sb">SB</span>';
         if (player.isBigBlind) badges += '<span class="badge badge-bb">BB</span>';
 
-        // Bet display
-        const betText = player.currentBet > 0 ? formatChips(player.currentBet) : '';
+        // Bet display with chip icon
+        let betHTML = '';
+        if (player.currentBet > 0) {
+            betHTML = `<span class="chip-icon"></span>${formatChips(player.currentBet)}`;
+        }
 
         seat.innerHTML = `
             <div class="player-quip" id="quip-${player.seatIndex}"></div>
             <div class="player-cards" id="cards-${player.seatIndex}"></div>
             <div class="player-info ${stateClass}">
-                <div class="player-avatar">${avatar}</div>
+                ${avatarHTML}
                 <div class="player-name">${player.name}</div>
-                <div class="player-chips">${player.isBusted ? 'BUSTED' : formatChips(player.chips)}</div>
+                <div class="player-chips"><span class="chip-icon chip-small"></span>${player.isBusted ? 'BUSTED' : formatChips(player.chips)}</div>
                 <div class="player-status">${badges}</div>
             </div>
-            <div class="player-bet-display">${betText}</div>
+            <div class="player-bet-display">${betHTML}</div>
             <div class="player-action-indicator" id="action-${player.seatIndex}"></div>
         `;
 
@@ -344,10 +786,36 @@ export class UIRenderer {
         el.className = `card ${small ? 'small' : ''} ${faceDown ? 'face-down' : card.color}`;
 
         if (!faceDown) {
+            // Determine center content based on card type
+            let centerClass = '';
+            let centerHTML = '';
+            const rank = card.rank;
+
+            if (rank === 14) {
+                // Ace: large centered suit
+                centerClass = 'ace-card';
+                centerHTML = `<span class="center-pip">${card.suitSymbol}</span>`;
+            } else if (rank >= 11 && rank <= 13) {
+                // Face cards: large faded letter behind suit
+                centerClass = 'face-card';
+                centerHTML = `<span class="face-letter">${card.rankName}</span><span class="center-pip">${card.suitSymbol}</span>`;
+            } else {
+                // Number cards: suit symbol in center
+                centerHTML = `<span class="center-pip">${card.suitSymbol}</span>`;
+            }
+
             el.innerHTML = `
-                <span class="rank">${card.rankName}</span>
-                <span class="suit">${card.suitSymbol}</span>
-                <span class="bottom-rank">${card.rankName}</span>
+                <div class="card-corner top-left">
+                    <span class="corner-rank">${card.rankName}</span>
+                    <span class="corner-suit">${card.suitSymbol}</span>
+                </div>
+                <div class="card-center ${centerClass}">
+                    ${centerHTML}
+                </div>
+                <div class="card-corner bottom-right">
+                    <span class="corner-rank">${card.rankName}</span>
+                    <span class="corner-suit">${card.suitSymbol}</span>
+                </div>
             `;
         }
 

@@ -8,6 +8,7 @@ import { ScenarioTrainer, OddsQuiz } from './practice-modes.js';
 import { TrainingRegimen, HandRankingQuiz, StartingHandQuiz, PotOddsQuiz, OutsQuiz } from './training-regimen.js';
 import { SUIT_SYMBOLS, RANK_NAMES, STARTING_HAND_TIERS, HAND_RANK_NAMES, formatChips } from './utils.js';
 import { LessonViewer } from './lessons/lesson-viewer.js';
+import { MultiplayerUI } from './multiplayer-ui.js';
 import { LESSON_BASICS, LESSON_HAND_RANKINGS, LESSON_STARTING_HANDS, LESSON_POSITION } from './lessons/lesson-data-basics.js';
 import { LESSON_POT_ODDS, LESSON_OUTS, LESSON_EQUITY_EV } from './lessons/lesson-data-math.js';
 import { LESSON_PREFLOP_STRATEGY, LESSON_POSTFLOP, LESSON_DRAWING } from './lessons/lesson-data-strategy.js';
@@ -74,6 +75,14 @@ class PokerApp {
         document.getElementById('start-game-btn').addEventListener('click', () => {
             this.readSettings();
             this.startGame();
+        });
+
+        // Multiplayer button
+        document.getElementById('multiplayer-btn').addEventListener('click', () => {
+            const name = document.getElementById('player-name').value.trim() || 'Player';
+            document.getElementById('mp-player-name').value = name;
+            this.multiplayerUI = new MultiplayerUI(this.renderer);
+            this.renderer.showScreen('multiplayer-lobby');
         });
 
         // Stats button
@@ -1732,9 +1741,31 @@ class PokerApp {
         for (const card of cards) {
             const el = document.createElement('div');
             el.className = `card small ${card.color}`;
+
+            let centerClass = '';
+            let centerHTML = '';
+            if (card.rank === 14) {
+                centerClass = 'ace-card';
+                centerHTML = `<span class="center-pip">${card.suitSymbol}</span>`;
+            } else if (card.rank >= 11 && card.rank <= 13) {
+                centerClass = 'face-card';
+                centerHTML = `<span class="face-letter">${card.rankName}</span><span class="center-pip">${card.suitSymbol}</span>`;
+            } else {
+                centerHTML = `<span class="center-pip">${card.suitSymbol}</span>`;
+            }
+
             el.innerHTML = `
-                <span class="rank">${card.rankName}</span>
-                <span class="suit">${card.suitSymbol}</span>
+                <div class="card-corner top-left">
+                    <span class="corner-rank">${card.rankName}</span>
+                    <span class="corner-suit">${card.suitSymbol}</span>
+                </div>
+                <div class="card-center ${centerClass}">
+                    ${centerHTML}
+                </div>
+                <div class="card-corner bottom-right">
+                    <span class="corner-rank">${card.rankName}</span>
+                    <span class="corner-suit">${card.suitSymbol}</span>
+                </div>
             `;
             container.appendChild(el);
         }
