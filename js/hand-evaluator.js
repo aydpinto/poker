@@ -1,4 +1,4 @@
-import { HAND_RANKS, HAND_RANK_NAMES } from './utils.js';
+import { HAND_RANKS, HAND_RANK_NAMES, getStartingHandTier } from './utils.js';
 import { Card, Deck } from './deck.js';
 
 export class HandEvaluator {
@@ -162,6 +162,79 @@ export class HandEvaluator {
     }
 
     /**
+     * Monte Carlo equity estimation with range-weighted opponent modeling.
+     * Instead of dealing random hands, narrow opponent range based on their
+     * likely holdings (estimated by action history).
+     * maxTier: 1-7 threshold — only opponent hands within this tier are simulated.
+     * Lower maxTier = tighter opponent range (premiums only).
+     */
+    static estimateEquityWithRanges(holeCards, communityCards, numOpponents, maxTier = 7, simulations = 600) {
+        if (maxTier >= 7) {
+            // No range restriction — use standard equity
+            return this.estimateEquity(holeCards, communityCards, numOpponents, simulations);
+        }
+
+        let wins = 0;
+        let ties = 0;
+        let validSims = 0;
+        const maxAttempts = simulations * 4; // prevent infinite loops with tight ranges
+        let attempts = 0;
+
+        while (validSims < simulations && attempts < maxAttempts) {
+            attempts++;
+            const deck = new Deck();
+            deck.removeCards([...holeCards, ...communityCards]);
+            deck.shuffle();
+
+            // Deal remaining community cards
+            const remainingCommunity = 5 - communityCards.length;
+            const simulatedCommunity = [...communityCards, ...deck.dealMultiple(remainingCommunity)];
+
+            // Evaluate our hand
+            const ourHand = this.bestHand([...holeCards, ...simulatedCommunity]);
+
+            // Deal and evaluate opponent hands with range filtering
+            let weWin = true;
+            let isTie = false;
+            let allOpponentsValid = true;
+
+            for (let o = 0; o < numOpponents; o++) {
+                const oppHole = deck.dealMultiple(2);
+
+                // Check if opponent hand is within estimated range
+                const oppTier = getStartingHandTier(oppHole[0], oppHole[1]);
+                if (oppTier > maxTier) {
+                    allOpponentsValid = false;
+                    break;
+                }
+
+                const oppHand = this.bestHand([...oppHole, ...simulatedCommunity]);
+                const cmp = this.compare(ourHand, oppHand);
+                if (cmp < 0) {
+                    weWin = false;
+                    isTie = false;
+                    break;
+                } else if (cmp === 0) {
+                    isTie = true;
+                }
+            }
+
+            if (!allOpponentsValid) continue;
+
+            validSims++;
+            if (weWin && !isTie) wins++;
+            else if (weWin && isTie) ties++;
+        }
+
+        if (validSims < simulations * 0.2) {
+            // Range too tight to get meaningful samples — fallback
+            return this.estimateEquity(holeCards, communityCards, numOpponents, simulations);
+        }
+
+        return (wins + ties * 0.5) / validSims;
+    }
+
+    /**
      * Get hand strength as a 0-1 value based on current cards.
      * Quick assessment without full Monte Carlo.
      */
@@ -232,6 +305,383 @@ export class HandEvaluator {
         }
 
         return Math.min(1, strength);
+    }
+
+    // ── Draw Detection ─────────────────────────────────────────────────────
+
+    /**
+     * Detect all draws (flush draws, straight draws) from hole + community cards.
+     * Returns { flushDraw, flushDrawOuts, straightDraw, straightDrawOuts, gutshot,
+     *           overcards, backdoorFlush, backdoorStraight, outs, drawStrength }
+     */
+    static detectDraws(holeCards, communityCards) {
+        const allCards = [...holeCards, ...communityCards];
+        const result = {
+            flushDraw: false,
+            flushDrawOuts: 0,
+            straightDraw: false,    // open-ended
+            straightDrawOuts: 0,
+            gutshot: false,
+            gutshotOuts: 0,
+            overcards: 0,
+            backdoorFlush: false,
+            backdoorStraight: false,
+            outs: 0,
+            drawStrength: 0
+        };
+
+        if (communityCards.length === 0) return result;
+
+        // ── Flush draw detection ──
+        const suitCounts = {};
+        for (const c of allCards) {
+            suitCounts[c.suit] = (suitCounts[c.suit] || 0) + 1;
+        }
+        for (const [suit, count] of Object.entries(suitCounts)) {
+            // Check if at least one hole card contributes
+            const holeInSuit = holeCards.filter(c => c.suit === suit).length;
+            if (holeInSuit === 0) continue;
+
+            if (count === 4 && communityCards.length <= 4) {
+                result.flushDraw = true;
+                result.flushDrawOuts = 9;
+            } else if (count === 3 && communityCards.length === 3) {
+                result.backdoorFlush = true;
+            }
+        }
+
+        // ── Straight draw detection ──
+        const uniqueRanks = [...new Set(allCards.map(c => c.rank))].sort((a, b) => a - b);
+        // Add low ace
+        if (uniqueRanks.includes(14)) uniqueRanks.unshift(1);
+
+        const holeRanks = new Set(holeCards.map(c => c.rank));
+
+        // Check all windows of 5 for straight connectivity
+        let bestStraightOuts = 0;
+        let isOpenEnded = false;
+        let isGutshot = false;
+
+        for (let target = 1; target <= 14; target++) {
+            const window = [];
+            for (let r = target; r < target + 5; r++) {
+                const rank = r > 14 ? r - 13 : r;
+                if (uniqueRanks.includes(rank)) {
+                    window.push(rank);
+                }
+            }
+
+            if (window.length === 4) {
+                // 4 out of 5 for a straight - check if hole cards contribute
+                const holeContributes = window.some(r => holeRanks.has(r) || (r === 1 && holeRanks.has(14)));
+                if (!holeContributes) continue;
+
+                // Find the missing rank
+                const needed = [];
+                for (let r = target; r < target + 5; r++) {
+                    const rank = r > 14 ? r - 13 : r;
+                    if (!uniqueRanks.includes(rank)) needed.push(rank);
+                }
+
+                if (needed.length === 1) {
+                    const missingRank = needed[0];
+                    // Open-ended: missing rank is at either end
+                    const isEnd = missingRank === target || missingRank === target + 4;
+                    // But A-high and wheel straights are only gutshots at the end
+                    const isTopOrBottom = (target + 4 > 14) || target === 1;
+
+                    if (isEnd && !isTopOrBottom) {
+                        isOpenEnded = true;
+                        bestStraightOuts = Math.max(bestStraightOuts, 8);
+                    } else {
+                        isGutshot = true;
+                        bestStraightOuts = Math.max(bestStraightOuts, 4);
+                    }
+                }
+            } else if (window.length === 3 && communityCards.length === 3) {
+                // Backdoor straight potential
+                const holeContributes = window.some(r => holeRanks.has(r) || (r === 1 && holeRanks.has(14)));
+                if (holeContributes) result.backdoorStraight = true;
+            }
+        }
+
+        if (isOpenEnded) {
+            result.straightDraw = true;
+            result.straightDrawOuts = bestStraightOuts;
+        }
+        if (isGutshot && !isOpenEnded) {
+            result.gutshot = true;
+            result.gutshotOuts = 4;
+        }
+
+        // ── Overcard detection ──
+        if (communityCards.length > 0) {
+            const boardMax = Math.max(...communityCards.map(c => c.rank));
+            result.overcards = holeCards.filter(c => c.rank > boardMax).length;
+        }
+
+        // ── Combine outs (don't double-count flush + straight) ──
+        let totalOuts = 0;
+        if (result.flushDraw && result.straightDraw) {
+            // Combo draw: flush(9) + straight(8) - overlap(~2) = ~15
+            totalOuts = result.flushDrawOuts + result.straightDrawOuts - 2;
+        } else if (result.flushDraw && result.gutshot) {
+            totalOuts = result.flushDrawOuts + result.gutshotOuts - 1;
+        } else {
+            totalOuts = result.flushDrawOuts + result.straightDrawOuts + result.gutshotOuts;
+        }
+        // Add overcards as partial outs (each overcard ~3 outs for top pair)
+        totalOuts += result.overcards * 3;
+        result.outs = totalOuts;
+
+        // ── Draw strength: rule of 2 and 4 ──
+        const cardsTocome = Math.max(0, 5 - communityCards.length);
+        if (cardsTocome === 2) {
+            result.drawStrength = Math.min(0.9, totalOuts * 4 / 100);
+        } else if (cardsTocome === 1) {
+            result.drawStrength = Math.min(0.9, totalOuts * 2 / 100);
+        }
+
+        return result;
+    }
+
+    // ── Board Texture Analysis ───────────────────────────────────────────
+
+    /**
+     * Analyze the community card texture.
+     * Returns { wetness (0-1), pairedness, connectivity, suitedness,
+     *           highCardDanger, possibleStraight, possibleFlush }
+     */
+    static analyzeBoardTexture(communityCards) {
+        if (communityCards.length === 0) {
+            return { wetness: 0, pairedness: false, connectivity: 0, suitedness: 0,
+                     highCardDanger: 0, possibleStraight: false, possibleFlush: false };
+        }
+
+        const ranks = communityCards.map(c => c.rank).sort((a, b) => a - b);
+        const suits = communityCards.map(c => c.suit);
+
+        // ── Pairedness ──
+        const rankCounts = {};
+        for (const r of ranks) rankCounts[r] = (rankCounts[r] || 0) + 1;
+        const pairedness = Object.values(rankCounts).some(c => c >= 2);
+
+        // ── Suitedness (flush potential) ──
+        const suitCounts = {};
+        for (const s of suits) suitCounts[s] = (suitCounts[s] || 0) + 1;
+        const maxSuited = Math.max(...Object.values(suitCounts));
+        const suitedness = maxSuited / communityCards.length;
+        const possibleFlush = maxSuited >= 3;
+
+        // ── Connectivity (straight potential) ──
+        const uniqueRanks = [...new Set(ranks)].sort((a, b) => a - b);
+        if (uniqueRanks.includes(14)) uniqueRanks.unshift(1); // wheel
+        let maxConnected = 1;
+        let connected = 1;
+        for (let i = 1; i < uniqueRanks.length; i++) {
+            const gap = uniqueRanks[i] - uniqueRanks[i - 1];
+            if (gap <= 2) {
+                connected++;
+                maxConnected = Math.max(maxConnected, connected);
+            } else {
+                connected = 1;
+            }
+        }
+        const connectivity = Math.min(1, (maxConnected - 1) / 3);
+        const possibleStraight = maxConnected >= 3;
+
+        // ── High card danger ──
+        const broadwayCards = ranks.filter(r => r >= 10).length;
+        const highCardDanger = broadwayCards / communityCards.length;
+
+        // ── Wetness (overall draw-heaviness) ──
+        let wetness = 0;
+        wetness += connectivity * 0.35;
+        wetness += suitedness * 0.35;
+        wetness += highCardDanger * 0.15;
+        if (pairedness) wetness -= 0.15; // paired boards are drier
+        wetness = Math.max(0, Math.min(1, wetness));
+
+        return {
+            wetness,
+            pairedness,
+            connectivity,
+            suitedness,
+            highCardDanger,
+            possibleStraight,
+            possibleFlush
+        };
+    }
+
+    // ── Relative Hand Strength ────────────────────────────────────────────
+
+    /**
+     * Evaluate hand strength RELATIVE to the board.
+     * A pair is strong on K72r but weak on JT98ss.
+     * Returns adjusted 0-1 strength.
+     */
+    static relativeHandStrength(holeCards, communityCards) {
+        if (communityCards.length === 0) return this._preflopStrength(holeCards);
+
+        const hand = this.bestHand([...holeCards, ...communityCards]);
+        const boardTexture = this.analyzeBoardTexture(communityCards);
+        let strength = this._normalizeHandScore(hand);
+
+        const boardRanks = communityCards.map(c => c.rank).sort((a, b) => b - a);
+        const holeRanks = holeCards.map(c => c.rank).sort((a, b) => b - a);
+
+        // ── Pair adjustments ──
+        if (hand.rank === 2) { // Pair
+            const pairRank = hand.kickers[0];
+            // Check if it's top pair, middle pair, or bottom pair
+            if (pairRank >= boardRanks[0]) {
+                // Top pair or overpair
+                // Kicker matters a lot
+                const kickerStrength = (hand.kickers[1] - 2) / 12;
+                strength += 0.05 + kickerStrength * 0.05;
+            } else if (pairRank >= boardRanks[Math.floor(boardRanks.length / 2)]) {
+                // Middle pair
+                strength -= 0.03;
+            } else {
+                // Bottom pair
+                strength -= 0.08;
+            }
+
+            // Pair loses value on wet/connected boards
+            if (boardTexture.wetness > 0.5) {
+                strength -= boardTexture.wetness * 0.08;
+            }
+            // Pair gains value on dry boards
+            if (boardTexture.wetness < 0.3) {
+                strength += 0.03;
+            }
+        }
+
+        // ── Two pair adjustments ──
+        if (hand.rank === 3) { // Two pair
+            // Two pair on a paired board is weaker (opponent can also have it)
+            if (boardTexture.pairedness) {
+                strength -= 0.06;
+            }
+            // Two pair on a very connected board with flush possible is vulnerable
+            if (boardTexture.possibleFlush || boardTexture.possibleStraight) {
+                strength -= 0.05;
+            }
+        }
+
+        // ── Trips/set adjustments ──
+        if (hand.rank === 4) { // Three of a kind
+            // Check if set (pair in hand) vs trips (pair on board)
+            const holePaired = holeRanks[0] === holeRanks[1];
+            if (holePaired) {
+                // Set: much stronger and disguised
+                strength += 0.08;
+            } else {
+                // Trips: board paired, opponent can also have trips
+                strength -= 0.03;
+            }
+        }
+
+        // ── Flush/straight vulnerability ──
+        if (hand.rank === 5) { // Straight
+            // Check if we have the nut straight
+            const ourStraightHigh = hand.kickers[0];
+            const maxPossibleStraightHigh = Math.min(14, boardRanks[0] + 4);
+            if (ourStraightHigh < maxPossibleStraightHigh) {
+                strength -= 0.05; // not the nut straight
+            }
+            // Straight on a flushy board is weaker
+            if (boardTexture.possibleFlush) {
+                strength -= 0.06;
+            }
+        }
+
+        if (hand.rank === 6) { // Flush
+            // Check flush card height (nut flush vs low flush)
+            const flushSuit = this._getFlushSuit(holeCards, communityCards);
+            if (flushSuit) {
+                const holeFlushCards = holeCards.filter(c => c.suit === flushSuit);
+                const highestHoleFlush = Math.max(...holeFlushCards.map(c => c.rank));
+                if (highestHoleFlush === 14) {
+                    strength += 0.05; // nut flush
+                } else if (highestHoleFlush < 10) {
+                    strength -= 0.05; // low flush, vulnerable
+                }
+            }
+            // Flush on a paired board: full house possible
+            if (boardTexture.pairedness) {
+                strength -= 0.05;
+            }
+        }
+
+        return Math.max(0, Math.min(1, strength));
+    }
+
+    /**
+     * Detect blocker effects: does holding certain cards reduce opponent's
+     * likelihood of strong hands?
+     * Returns { blocksNutFlush, blocksTopSet, blocksOverpair, blockerStrength (0-1) }
+     */
+    static detectBlockers(holeCards, communityCards) {
+        const result = {
+            blocksNutFlush: false,
+            blocksTopSet: false,
+            blocksOverpair: false,
+            blocksTopPair: false,
+            blockerStrength: 0
+        };
+
+        if (communityCards.length === 0) return result;
+
+        const boardRanks = communityCards.map(c => c.rank).sort((a, b) => b - a);
+        const boardSuits = communityCards.map(c => c.suit);
+
+        // ── Flush blockers ──
+        const suitCounts = {};
+        for (const s of boardSuits) suitCounts[s] = (suitCounts[s] || 0) + 1;
+        for (const [suit, count] of Object.entries(suitCounts)) {
+            if (count >= 3) {
+                // Board has flush potential in this suit
+                const holeInSuit = holeCards.filter(c => c.suit === suit);
+                if (holeInSuit.some(c => c.rank === 14)) {
+                    result.blocksNutFlush = true;
+                    result.blockerStrength += 0.15;
+                } else if (holeInSuit.some(c => c.rank >= 12)) {
+                    result.blockerStrength += 0.08;
+                }
+            }
+        }
+
+        // ── Set/pair blockers ──
+        const topBoardRank = boardRanks[0];
+        if (holeCards.some(c => c.rank === topBoardRank)) {
+            // We hold a card matching the top board card
+            // Opponent can't have top set, and top pair combos are reduced
+            result.blocksTopSet = true;
+            result.blocksTopPair = true;
+            result.blockerStrength += 0.1;
+        }
+
+        // ── Overpair blockers ──
+        const highHole = Math.max(...holeCards.map(c => c.rank));
+        if (highHole > topBoardRank) {
+            // Holding a card above all board cards reduces opponent overpair combos
+            result.blocksOverpair = true;
+            result.blockerStrength += 0.06;
+        }
+
+        result.blockerStrength = Math.min(0.3, result.blockerStrength);
+        return result;
+    }
+
+    static _getFlushSuit(holeCards, communityCards) {
+        const allCards = [...holeCards, ...communityCards];
+        const suitCounts = {};
+        for (const c of allCards) suitCounts[c.suit] = (suitCounts[c.suit] || 0) + 1;
+        for (const [suit, count] of Object.entries(suitCounts)) {
+            if (count >= 5) return suit;
+        }
+        return null;
     }
 
     // ── Private helpers ────────────────────────────────────────────────────

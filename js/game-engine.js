@@ -716,17 +716,29 @@ export class GameEngine extends EventEmitter {
 
     updateAIStates(activePlayers) {
         const bigPotThreshold = this.config.bigBlind * 10;
+        const wasShowdown = activePlayers.length > 1;
+
+        // Detect if the winner(s) had weak hands (bluffed)
+        let winnerHadWeakHand = false;
+        if (!wasShowdown && activePlayers.length === 1) {
+            // Everyone folded to one player — could be a bluff
+            // We can't see their cards, but if they bet a lot, it felt like a bluff
+            const winner = activePlayers[0];
+            if (winner.totalBetThisHand > bigPotThreshold) {
+                winnerHadWeakHand = true; // assume possible bluff for emotional impact
+            }
+        }
 
         for (const p of this.players) {
             if (p.isHuman || p.isBusted) continue;
 
-            const wasInHand = activePlayers.some(a => a.id === p.id);
-            const chipDiff = p.chips - (p.chips + p.totalBetThisHand);
+            const wasInHand = !p.hasFolded && !p.isBusted;
+            const didFold = p.hasFolded;
 
             const result = {
-                lostBigPot: wasInHand && p.totalBetThisHand > bigPotThreshold && p.hasFolded,
-                wonBigPot: wasInHand && !p.hasFolded && p.totalBetThisHand > bigPotThreshold,
-                gotBluffed: false, // Would need showdown info to determine
+                lostBigPot: didFold && p.totalBetThisHand > bigPotThreshold,
+                wonBigPot: wasInHand && activePlayers.some(a => a.id === p.id) && p.totalBetThisHand > bigPotThreshold,
+                gotBluffed: didFold && p.totalBetThisHand > bigPotThreshold && winnerHadWeakHand,
                 foldedPreflop: p.hasFolded && p.totalBetThisHand <= this.config.bigBlind
             };
 

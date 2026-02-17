@@ -29,7 +29,6 @@ class PokerApp {
         this.settings = {
             playerName: 'Player',
             opponentCount: 3,
-            difficulty: 3,
             startingChips: 1000
         };
 
@@ -151,16 +150,8 @@ class PokerApp {
             }
         });
 
-        // Read difficulty
-        const diffBtns = document.querySelectorAll('.form-group')[2].querySelectorAll('.selector-btn');
-        diffBtns.forEach(btn => {
-            if (btn.classList.contains('active')) {
-                this.settings.difficulty = parseInt(btn.dataset.value);
-            }
-        });
-
         // Read starting chips
-        const chipBtns = document.querySelectorAll('.form-group')[3].querySelectorAll('.selector-btn');
+        const chipBtns = document.querySelectorAll('.form-group')[2].querySelectorAll('.selector-btn');
         chipBtns.forEach(btn => {
             if (btn.classList.contains('active')) {
                 this.settings.startingChips = parseInt(btn.dataset.value);
@@ -224,7 +215,7 @@ class PokerApp {
     }
 
     startGame() {
-        const { playerName, opponentCount, difficulty, startingChips } = this.settings;
+        const { playerName, opponentCount, startingChips } = this.settings;
 
         // Create players
         const players = [];
@@ -243,8 +234,7 @@ class PokerApp {
                 persona.displayName,
                 startingChips,
                 seatPositions[i],
-                persona,
-                difficulty
+                persona
             );
             players.push(ai);
         }

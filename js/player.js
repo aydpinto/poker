@@ -76,11 +76,14 @@ export class MultiplayerPlayer extends Player {
 }
 
 export class AIPlayer extends Player {
-    constructor(name, chips, seatIndex, persona, difficulty) {
+    constructor(name, chips, seatIndex, persona) {
         super(name, chips, seatIndex);
         this.isHuman = false;
         this.persona = persona;
-        this.difficulty = difficulty; // 1-5
+        this.difficulty = 5; // Always Pro level
+
+        // Multi-street plan (created on flop, consulted on turn/river)
+        this.streetPlan = null;
 
         // Emotional state
         this.emotionalState = {
@@ -102,6 +105,7 @@ export class AIPlayer extends Player {
 
     resetForNewHand() {
         super.resetForNewHand();
+        this.streetPlan = null;
     }
 
     initOpponentModel(playerId) {
@@ -125,7 +129,7 @@ export class AIPlayer extends Player {
     updateOpponentModel(playerId, action, context) {
         this.initOpponentModel(playerId);
         const model = this.opponentModels[playerId];
-        const learningRate = this.persona.adaptability * (this.difficulty / 5) * 0.15;
+        const learningRate = this.persona.adaptability * 0.15;
 
         model.totalActions++;
 
